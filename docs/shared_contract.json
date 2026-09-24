@@ -1,0 +1,7 @@
+{
+  "seq_id": 10423,
+  "timestamp_us": 1727283600000000,
+  "iv": "base64_string",
+  "ciphertext": "base64_string",
+  "mac": "hex_string"
+}

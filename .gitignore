@@ -1,0 +1,16 @@
+# C++ / Build output
+build/
+*.o
+*.out
+*.app
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Database & Environment
+*.env
+*.sqlite3
+pgdata/
