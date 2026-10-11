@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLAVIS Clinical Dashboard</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --panel: #111a2e;
+    --border: #1f2a44;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --blue: #38bdf8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  h1 { margin: 0; font-size: 20px; letter-spacing: 0.5px; }
+  h1 span { color: var(--muted); font-weight: 400; font-size: 14px; margin-left: 8px; }
+  h2 { margin: 0 0 10px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .status { display: flex; gap: 8px; }
+  .badge {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .badge.on { color: var(--green); border-color: var(--green); }
+  .badge.off { color: var(--amber); border-color: var(--amber); }
+  .badge.demo { color: var(--blue); border-color: var(--blue); }
+  .banner {
+    margin: 16px 24px 0;
+    padding: 14px 18px;
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid var(--red);
+    color: #fecaca;
+    font-weight: 600;
+    animation: pulse 1s ease-in-out infinite;
+  }
+  .hidden { display: none; }
+  @keyframes pulse { 50% { background: rgba(239, 68, 68, 0.3); } }
+  main { padding: 16px 24px 32px; display: grid; gap: 16px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .card, .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .card .value { font-size: 30px; font-weight: 700; margin-top: 6px; }
+  .card .unit { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .value.ok { color: var(--green); }
+  .value.warn { color: var(--amber); }
+  .value.bad { color: var(--red); }
+  .chart-wrap { position: relative; height: 320px; }
+  .caption { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .alerts-head { display: flex; justify-content: space-between; align-items: center; }
+  button {
+    background: var(--red);
+    color: white;
+    border: 0;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  ul { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; }
+  li {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    border-radius: 6px;
+    border-left: 4px solid var(--muted);
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 13px;
+  }
+  li.security { border-left-color: var(--red); background: rgba(239, 68, 68, 0.1); }
+  li.physiological { border-left-color: var(--amber); background: rgba(245, 158, 11, 0.08); }
+  li .tag { font-weight: 700; min-width: 110px; }
+  li.security .tag { color: var(--red); }
+  li.physiological .tag { color: var(--amber); }
+  li .time { margin-left: auto; color: var(--muted); white-space: nowrap; }
+  .empty { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>CLAVIS <span>Cardiac Telemetry Monitor</span></h1>
+  <div class="status">
+    {% if demo %}<span class="badge demo">DEMO MODE</span>{% endif %}
+    <span id="conn" class="badge off">Disconnected</span>
+    <span id="fresh" class="badge off">Waiting for data</span>
+  </div>
+</header>
+
+<div id="banner" class="banner hidden"></div>
+
+<main>
+  <section class="cards">
+    <div class="card"><div class="label">Heart rate</div><div class="value" id="bpm">--<span class="unit">BPM</span></div></div>
+    <div class="card"><div class="label">RR interval</div><div class="value" id="rr">--<span class="unit">ms</span></div></div>
+    <div class="card"><div class="label">Rhythm</div><div class="value" id="rhythm">--</div></div>
+    <div class="card"><div class="label">Frames / sec</div><div class="value" id="fps">0</div></div>
+    <div class="card"><div class="label">Security alerts</div><div class="value ok" id="secCount">0</div></div>
+  </section>
+
+  <section class="panel">
+    <h2>ECG waveform</h2>
+    <div class="chart-wrap"><canvas id="ecg"></canvas></div>
+    <div class="caption">Last frame sequence: <span id="seq">--</span></div>
+  </section>
+
+  <section class="panel">
+    <div class="alerts-head">
+      <h2>Alerts</h2>
+      {% if demo %}<button id="attack" type="button">Simulate attack</button>{% endif %}
+    </div>
+    <ul id="alerts"></ul>
+    <div id="noAlerts" class="empty">No alerts yet.</div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"></script>
+<script>
+  const MAX_POINTS = 1800;
+  const MAX_ALERTS = 50;
+  const BANNER_MS = 15000;
+
+  const chart = new Chart(document.getElementById('ecg'), {
+    type: 'line',
+    data: {
+      labels: new Array(MAX_POINTS).fill(''),
+      datasets: [{
+        data: new Array(MAX_POINTS).fill(null),
+        borderColor: '#22c55e',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0
+      }]
+    },
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { display: false },
+        y: {
+          suggestedMin: -1,
+          suggestedMax: 1.6,
+          ticks: { color: '#9ca3af' },
+          grid: { color: '#1f2a44' },
+          title: { display: true, text: 'mV', color: '#9ca3af' }
+        }
+      },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } }
+    }
+  });
+
+  let dirty = false;
+  let lastDataAt = 0;
+  let framesThisSecond = 0;
+  let securityCount = 0;
+  let bannerTimer = null;
+  const seenAlerts = new Set();
+
+  function pushSamples(samples) {
+    const data = chart.data.datasets[0].data;
+    for (const v of samples) data.push(v);
+    if (data.length > MAX_POINTS) data.splice(0, data.length - MAX_POINTS);
+    dirty = true;
+  }
+
+  function redraw() {
+    if (dirty) {
+      chart.update('none');
+      dirty = false;
+    }
+    requestAnimationFrame(redraw);
+  }
+  requestAnimationFrame(redraw);
+
+  function setValue(id, text, unit, level) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    if (unit) {
+      const span = document.createElement('span');
+      span.className = 'unit';
+      span.textContent = unit;
+      el.appendChild(span);
+    }
+    el.className = 'value' + (level ? ' ' + level : '');
+  }
+
+  function rhythmLevel(label) {
+    if (label === 'NORMAL') return 'ok';
+    if (label === 'BRADYCARDIA' || label === 'TACHYCARDIA') return 'warn';
+    return label ? 'bad' : '';
+  }
+
+  function onTelemetry(p) {
+    pushSamples(p.samples);
+    lastDataAt = Date.now();
+    framesThisSecond += p.count;
+    if (p.bpm !== null) setValue('bpm', Math.round(p.bpm), ' BPM', '');
+    if (p.rr_ms !== null) setValue('rr', Math.round(p.rr_ms), ' ms', '');
+    if (p.classification) setValue('rhythm', p.classification, '', rhythmLevel(p.classification));
+    document.getElementById('seq').textContent = p.last_seq;
+  }
+
+  function showBanner(text) {
+    const banner = document.getElementById('banner');
+    banner.textContent = text;
+    banner.classList.remove('hidden');
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => banner.classList.add('hidden'), BANNER_MS);
+  }
+
+  function addAlert(alert, quiet) {
+    if (seenAlerts.has(alert.id)) return;
+    seenAlerts.add(alert.id);
+
+    const li = document.createElement('li');
+    li.className = alert.category;
+
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.textContent = alert.category === 'security' ? 'SECURITY' :
+                      alert.category === 'physiological' ? 'CARDIAC' : 'INFO';
+
+    const body = document.createElement('span');
+    const parts = [alert.event_type];
+    if (alert.seq_id !== null && alert.seq_id !== undefined) parts.push('seq ' + alert.seq_id);
+    if (alert.detail) parts.push(alert.detail);
+    if (alert.rr_ms !== null && alert.rr_ms !== undefined) parts.push('RR ' + Math.round(alert.rr_ms) + ' ms');
+    body.textContent = parts.join(' | ');
+
+    const time = document.createElement('span');
+    time.className = 'time';
+    time.textContent = new Date(alert.ts).toLocaleTimeString();
+
+    li.append(tag, body, time);
+    const list = document.getElementById('alerts');
+    list.prepend(li);
+    while (list.children.length > MAX_ALERTS) list.removeChild(list.lastChild);
+    document.getElementById('noAlerts').classList.add('hidden');
+
+    if (alert.category === 'security') {
+      securityCount += 1;
+      const counter = document.getElementById('secCount');
+      counter.textContent = securityCount;
+      counter.className = 'value bad';
+      if (!quiet) showBanner('SECURITY ALERT: ' + alert.event_type + (alert.detail ? ' (' + alert.detail + ')' : ''));
+    }
+  }
+
+  const socket = io();
+  const connBadge = document.getElementById('conn');
+  socket.on('connect', () => { connBadge.textContent = 'Connected'; connBadge.className = 'badge on'; });
+  socket.on('disconnect', () => { connBadge.textContent = 'Disconnected'; connBadge.className = 'badge off'; });
+  socket.on('telemetry', onTelemetry);
+  socket.on('alert', (a) => addAlert(a, false));
+  socket.on('history', (list) => list.forEach((a) => addAlert(a, true)));
+
+  setInterval(() => {
+    document.getElementById('fps').textContent = framesThisSecond;
+    framesThisSecond = 0;
+    const fresh = document.getElementById('fresh');
+    const live = Date.now() - lastDataAt < 3000;
+    fresh.textContent = live ? 'Receiving data' : 'Waiting for data';
+    fresh.className = 'badge ' + (live ? 'on' : 'off');
+  }, 1000);
+
+  const attackButton = document.getElementById('attack');
+  if (attackButton) {
+    attackButton.addEventListener('click', () => fetch('/demo/attack', { method: 'POST' }));
+  }
+</script>
+</body>
+</html>
