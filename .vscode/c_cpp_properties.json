@@ -1,0 +1,15 @@
+{
+    "configurations": [
+        {
+            "name": "MacPorts",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/opt/local/include"
+            ],
+            "compilerPath": "/usr/bin/clang++",
+            "cStandard": "c17",
+            "cppStandard": "c++17"
+        }
+    ],
+    "version": 4
+}
