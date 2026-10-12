@@ -17,6 +17,20 @@ target_include_directories(clavis_classifier PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}
 add_executable(ecg_playback apps/ecg_playback.cpp)
 target_link_libraries(ecg_playback PRIVATE clavis_ingest clavis_qrs clavis_classifier)
 
+find_package(OpenSSL REQUIRED)
+
+add_library(clavis_crypto src/crypto/envelope.cpp src/protocol/replay.cpp)
+target_include_directories(clavis_crypto PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_link_libraries(clavis_crypto PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+
+add_executable(device_gateway apps/device_gateway.cpp)
+target_link_libraries(device_gateway PRIVATE 
+    clavis_ingest 
+    clavis_qrs 
+    clavis_classifier 
+    clavis_crypto
+)
+
 include(CTest)
 if(BUILD_TESTING)
   add_executable(ingest_test tests/ingest_test.cpp)
