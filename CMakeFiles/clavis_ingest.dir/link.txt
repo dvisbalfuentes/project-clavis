@@ -1,0 +1,2 @@
+/usr/bin/ar qc libclavis_ingest.a CMakeFiles/clavis_ingest.dir/src/engine/ingest.cpp.o
+/usr/bin/ranlib libclavis_ingest.a

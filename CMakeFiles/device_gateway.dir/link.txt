@@ -1,0 +1,1 @@
+/usr/bin/c++ -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/device_gateway.dir/apps/device_gateway.cpp.o -o device_gateway  libclavis_ingest.a libclavis_qrs.a libclavis_classifier.a libclavis_crypto.a /opt/local/lib/libssl.dylib /opt/local/lib/libcrypto.dylib

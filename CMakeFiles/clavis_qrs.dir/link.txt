@@ -1,0 +1,2 @@
+/usr/bin/ar qc libclavis_qrs.a CMakeFiles/clavis_qrs.dir/src/engine/pan_tompkins.cpp.o
+/usr/bin/ranlib libclavis_qrs.a
