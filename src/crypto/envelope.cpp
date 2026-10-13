@@ -6,8 +6,6 @@
 #include <sstream>
 #include <iostream>
 
-const int TAG_SIZE = 16;
-
 bool encrypt_aes_gcm( 
     const std::vector<uint8_t>& plaintext, 
     const std::vector<uint8_t>& key, 
