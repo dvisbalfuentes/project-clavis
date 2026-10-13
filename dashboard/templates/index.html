@@ -107,7 +107,7 @@
 <header>
   <h1>CLAVIS <span>Cardiac Telemetry Monitor</span></h1>
   <div class="status">
-    {% if demo %}<span class="badge demo">DEMO MODE</span>{% endif %}
+    <span class="badge demo">DEMO MODE</span>
     <span id="conn" class="badge off">Disconnected</span>
     <span id="fresh" class="badge off">Waiting for data</span>
   </div>
@@ -133,7 +133,7 @@
   <section class="panel">
     <div class="alerts-head">
       <h2>Alerts</h2>
-      {% if demo %}<button id="attack" type="button">Simulate attack</button>{% endif %}
+      <button id="attack" type="button">Simulate attack</button>
     </div>
     <ul id="alerts"></ul>
     <div id="noAlerts" class="empty">No alerts yet.</div>
@@ -166,83 +166,4 @@
       scales: {
         x: { display: false },
         y: {
-          suggestedMin: -1,
-          suggestedMax: 1.6,
-          ticks: { color: '#9ca3af' },
-          grid: { color: '#1f2a44' },
-          title: { display: true, text: 'mV', color: '#9ca3af' }
-        }
-      },
-      plugins: { legend: { display: false }, tooltip: { enabled: false }
-      }
-    }
-  });
-
-  const socket = io();
-
-  socket.on('connect', () => {
-    document.getElementById('conn').textContent = 'Connected';
-    document.getElementById('conn').className = 'badge on';
-    document.getElementById('fresh').textContent = 'Live data';
-    document.getElementById('fresh').className = 'badge on';
-  });
-
-  socket.on('disconnect', () => {
-    document.getElementById('conn').textContent = 'Disconnected';
-    document.getElementById('conn').className = 'badge off';
-    document.getElementById('fresh').textContent = 'Waiting for data';
-    document.getElementById('fresh').className = 'badge off';
-  });
-
-  socket.on('telemetry', (data) => {
-    // Update numerical badges
-    if (data.bpm) document.getElementById('bpm').innerHTML = data.bpm + '<span class="unit">BPM</span>';
-    if (data.rr) document.getElementById('rr').innerHTML = data.rr + '<span class="unit">ms</span>';
-    if (data.rhythm) document.getElementById('rhythm').textContent = data.rhythm;
-    if (data.fps) document.getElementById('fps').textContent = data.fps;
-    if (data.seq) document.getElementById('seq').textContent = data.seq;
-
-    // Apply the math fix and update the chart
-    const rawWaveform = data.ecg || data.waveform;
-    if (rawWaveform) {
-      const scaledEcg = rawWaveform.map(v => v / 200.0);
-      chart.data.datasets[0].data = scaledEcg;
-      chart.update();
-    }
-  });
-
-  // Handle your security attacks and Aswina's physiological alerts
-  socket.on('alert', (msg) => {
-    const ul = document.getElementById('alerts');
-    const empty = document.getElementById('noAlerts');
-    if (empty) empty.classList.add('hidden');
-    
-    const li = document.createElement('li');
-    li.className = msg.type === 'security' ? 'security' : 'physiological';
-    li.innerHTML = `<span class="tag">${msg.tag}</span> <span class="desc">${msg.desc}</span> <span class="time">${new Date().toLocaleTimeString()}</span>`;
-    
-    ul.prepend(li);
-    if (ul.children.length > MAX_ALERTS) ul.lastChild.remove();
-
-    if (msg.type === 'security') {
-        const banner = document.getElementById('banner');
-        banner.textContent = `SECURITY WARNING: ${msg.desc}`;
-        banner.classList.remove('hidden');
-        
-        let secCount = parseInt(document.getElementById('secCount').textContent) || 0;
-        document.getElementById('secCount').textContent = secCount + 1;
-        document.getElementById('secCount').className = 'value bad';
-        
-        setTimeout(() => banner.classList.add('hidden'), BANNER_MS);
-    }
-  });
-
-  const attackBtn = document.getElementById('attack');
-  if (attackBtn) {
-    attackBtn.addEventListener('click', () => {
-      socket.emit('simulate_attack');
-    });
-  }
-</script>
-</body>
-</html>
+          suggestedMin
