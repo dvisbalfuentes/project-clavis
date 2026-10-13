@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "[+] Connected to CLAVIS Ingestion Service.\n";
 
-    clavis::engine::play_realtime(reader, rate, [&](const auto& sample) {
+    clavis::engine::play_realtime(reader, rate, [&](const clavis::engine::EcgSample& sample) {
         const auto result = detector.process(sample.voltage.front());
         
         if (result.sufficient_data && result.peak_detected) {

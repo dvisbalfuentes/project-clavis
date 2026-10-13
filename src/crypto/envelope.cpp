@@ -2,13 +2,56 @@
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/err.h>
+#include <openssl/bio.h>
+#include <openssl/buffer.h>
+#include <openssl/rand.h>
 #include <iomanip>
 #include <sstream>
 #include <iostream>
 
-const int TAG_SIZE = 16;
+using namespace clavis::crypto;
 
-bool encrypt_aes_gcm( 
+std::string base64_encode(const std::vector<uint8_t>& buffer) {
+    BIO *bio, *b64;
+    BUF_MEM *bufferPtr;
+    b64 = BIO_new(BIO_f_base64());
+    bio = BIO_new(BIO_s_mem());
+    bio = BIO_push(b64, bio);
+    BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
+    BIO_write(bio, buffer.data(), buffer.size());
+    BIO_flush(bio);
+    BIO_get_mem_ptr(bio, &bufferPtr);
+    std::string result(bufferPtr->data, bufferPtr->length);
+    BIO_free_all(bio);
+    return result;
+}
+
+bool Envelope::encrypt_and_sign(
+    const std::string& plaintext,
+    std::string& base64_iv,
+    std::string& base64_ciphertext,
+    std::string& hex_mac
+) {
+    std::vector<uint8_t> pt(plaintext.begin(), plaintext.end());
+    std::vector<uint8_t> key(AES_KEY_SIZE, 0x01); // Demo PSK
+    std::vector<uint8_t> iv(IV_SIZE);
+    RAND_bytes(iv.data(), IV_SIZE);
+    
+    std::vector<uint8_t> ct;
+    std::vector<uint8_t> tag;
+    
+    if (!encrypt_aes_gcm(pt, key, iv, ct, tag)) return false;
+    
+    base64_iv = base64_encode(iv);
+    base64_ciphertext = base64_encode(ct);
+    
+    std::vector<uint8_t> hmac_key(HMAC_KEY_SIZE, 0x02); // Demo HMAC Key
+    hex_mac = compute_hmac_sha256(ct, hmac_key);
+    
+    return true;
+}
+
+bool Envelope::encrypt_aes_gcm( 
     const std::vector<uint8_t>& plaintext, 
     const std::vector<uint8_t>& key, 
     const std::vector<uint8_t>& iv, 
@@ -66,7 +109,7 @@ bool encrypt_aes_gcm(
     return true; 
 } 
 
-bool decrypt_aes_gcm( 
+bool Envelope::decrypt_aes_gcm( 
     const std::vector<uint8_t>& ciphertext, 
     const std::vector<uint8_t>& key, 
     const std::vector<uint8_t>& iv, 
@@ -124,7 +167,7 @@ bool decrypt_aes_gcm(
     } 
 } 
 
-std::string compute_hmac_sha256( 
+std::string Envelope::compute_hmac_sha256( 
     const std::vector<uint8_t>& data, 
     const std::vector<uint8_t>& hmac_key 
 ) { 
