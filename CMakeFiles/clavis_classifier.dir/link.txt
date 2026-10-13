@@ -1,0 +1,2 @@
+/usr/bin/ar qc libclavis_classifier.a CMakeFiles/clavis_classifier.dir/src/engine/classifier.cpp.o
+/usr/bin/ranlib libclavis_classifier.a

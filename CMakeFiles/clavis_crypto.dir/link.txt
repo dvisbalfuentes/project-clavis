@@ -1,0 +1,2 @@
+/usr/bin/ar qc libclavis_crypto.a CMakeFiles/clavis_crypto.dir/src/crypto/envelope.cpp.o CMakeFiles/clavis_crypto.dir/src/protocol/replay.cpp.o
+/usr/bin/ranlib libclavis_crypto.a

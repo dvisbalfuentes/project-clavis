@@ -1,0 +1,1 @@
+/usr/bin/c++ -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/classifier_test.dir/tests/classifier_test.cpp.o -o classifier_test  libclavis_classifier.a
