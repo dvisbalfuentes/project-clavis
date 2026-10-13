@@ -1,5 +1,5 @@
-#ifndef ENVELOPE\_HPP 
-#define ENVELOPE\_HPP 
+#ifndef ENVELOPE_HPP 
+#define ENVELOPE_HPP 
 
 #include <string>
 #include <vector>
