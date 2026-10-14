@@ -48,14 +48,14 @@
     margin: 16px 24px 0;
     padding: 14px 18px;
     border-radius: 8px;
-    background: rgba(239, 68, 68, 0.15);
+    background: rgba(239, 68, 68, 0.18);
     border: 1px solid var(--red);
     color: #fecaca;
     font-weight: 600;
     animation: pulse 1s ease-in-out infinite;
   }
   .hidden { display: none; }
-  @keyframes pulse { 50% { background: rgba(239, 68, 68, 0.3); } }
+  @keyframes pulse { 50% { background: rgba(239, 68, 68, 0.35); } }
   main { padding: 16px 24px 32px; display: grid; gap: 16px; }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
   .card, .panel {
@@ -72,7 +72,8 @@
   .value.bad { color: var(--red); }
   .chart-wrap { position: relative; height: 320px; }
   .caption { margin-top: 8px; font-size: 12px; color: var(--muted); }
-  .alerts-head { display: flex; justify-content: space-between; align-items: center; }
+  .alerts-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .alerts-head h2 { margin: 0; }
   button {
     background: var(--red);
     color: white;
@@ -80,8 +81,10 @@
     border-radius: 6px;
     padding: 8px 14px;
     font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
   }
+  button:active { transform: scale(0.98); }
   ul { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; }
   li {
     display: flex;
@@ -94,9 +97,9 @@
     background: rgba(255, 255, 255, 0.03);
     font-size: 13px;
   }
-  li.security { border-left-color: var(--red); background: rgba(239, 68, 68, 0.1); }
+  li.security { border-left-color: var(--red); background: rgba(239, 68, 68, 0.12); }
   li.physiological { border-left-color: var(--amber); background: rgba(245, 158, 11, 0.08); }
-  li .tag { font-weight: 700; min-width: 110px; }
+  li .tag { font-weight: 700; min-width: 160px; }
   li.security .tag { color: var(--red); }
   li.physiological .tag { color: var(--amber); }
   li .time { margin-left: auto; color: var(--muted); white-space: nowrap; }
@@ -107,7 +110,7 @@
 <header>
   <h1>CLAVIS <span>Cardiac Telemetry Monitor</span></h1>
   <div class="status">
-    {% if demo %}<span class="badge demo">DEMO MODE</span>{% endif %}
+    <span class="badge demo">DEMO MODE</span>
     <span id="conn" class="badge off">Disconnected</span>
     <span id="fresh" class="badge off">Waiting for data</span>
   </div>
@@ -133,7 +136,7 @@
   <section class="panel">
     <div class="alerts-head">
       <h2>Alerts</h2>
-      {% if demo %}<button id="attack" type="button">Simulate attack</button>{% endif %}
+      <button id="attack" type="button">Simulate attack</button>
     </div>
     <ul id="alerts"></ul>
     <div id="noAlerts" class="empty">No alerts yet.</div>
@@ -143,16 +146,18 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"></script>
 <script>
-  const MAX_POINTS = 1800;
+  const MAX_POINTS = 1080;
   const MAX_ALERTS = 50;
   const BANNER_MS = 15000;
+  const ecgBuffer = new Array(MAX_POINTS).fill(null);
+  let bannerTimer = null;
 
   const chart = new Chart(document.getElementById('ecg'), {
     type: 'line',
     data: {
       labels: new Array(MAX_POINTS).fill(''),
       datasets: [{
-        data: new Array(MAX_POINTS).fill(null),
+        data: ecgBuffer,
         borderColor: '#22c55e',
         borderWidth: 1.5,
         pointRadius: 0,
@@ -166,11 +171,120 @@
       scales: {
         x: { display: false },
         y: {
-          suggestedMin: -1,
-          suggestedMax: 1.6,
+          suggestedMin: -0.5,
+          suggestedMax: 1.5,
           ticks: { color: '#9ca3af' },
           grid: { color: '#1f2a44' },
           title: { display: true, text: 'mV', color: '#9ca3af' }
         }
       },
-      plugins: { legend: { display: false }, tooltip: { enabled: false }
+      plugins: { legend: { display: false }, tooltip: { enabled: false } }
+    }
+  });
+
+  const socket = io();
+
+  socket.on('connect', () => {
+    document.getElementById('conn').textContent = 'Connected';
+    document.getElementById('conn').className = 'badge on';
+    document.getElementById('fresh').textContent = 'Live data';
+    document.getElementById('fresh').className = 'badge on';
+  });
+
+  socket.on('disconnect', () => {
+    document.getElementById('conn').textContent = 'Disconnected';
+    document.getElementById('conn').className = 'badge off';
+    document.getElementById('fresh').textContent = 'Waiting for data';
+    document.getElementById('fresh').className = 'badge off';
+  });
+
+  socket.on('telemetry', (data) => {
+    if (data.bpm != null) {
+      document.getElementById('bpm').innerHTML = Math.round(data.bpm) + '<span class="unit">BPM</span>';
+    }
+    const rrVal = data.rr_ms != null ? data.rr_ms : data.rr;
+    if (rrVal != null) {
+      document.getElementById('rr').innerHTML = Math.round(rrVal) + '<span class="unit">ms</span>';
+    }
+    const rhythmVal = data.classification || data.rhythm;
+    if (rhythmVal) {
+      const rEl = document.getElementById('rhythm');
+      rEl.textContent = rhythmVal;
+      rEl.className = 'value ' + (rhythmVal === 'NORMAL' ? 'ok' : 'warn');
+    }
+    const fpsVal = data.count != null ? Math.round(data.count / 0.25) : data.fps;
+    if (fpsVal != null) {
+      document.getElementById('fps').textContent = fpsVal;
+    }
+    const seqVal = data.last_seq != null ? data.last_seq : data.seq;
+    if (seqVal != null) {
+      document.getElementById('seq').textContent = seqVal;
+    }
+
+    const incoming = data.samples || data.ecg || data.waveform;
+    if (Array.isArray(incoming) && incoming.length > 0) {
+      for (let i = 0; i < incoming.length; i++) {
+        ecgBuffer.push(incoming[i]);
+      }
+      while (ecgBuffer.length > MAX_POINTS) {
+        ecgBuffer.shift();
+      }
+      chart.update('none');
+    }
+  });
+
+  function renderAlert(msg) {
+    const ul = document.getElementById('alerts');
+    const empty = document.getElementById('noAlerts');
+    if (empty) empty.classList.add('hidden');
+
+    const category = msg.category || msg.type || 'security';
+    const tag = msg.event_type || msg.tag || 'SECURITY ALERT';
+    const desc = msg.detail || msg.desc || 'Replay Attack Blocked [Sequence ID Duplicate]';
+    const timeStr = msg.ts ? new Date(msg.ts).toLocaleTimeString() : new Date().toLocaleTimeString();
+
+    const li = document.createElement('li');
+    li.className = category === 'security' ? 'security' : 'physiological';
+    li.innerHTML = `<span class="tag">${tag}</span> <span class="desc">${desc}</span> <span class="time">${timeStr}</span>`;
+
+    ul.prepend(li);
+    while (ul.children.length > MAX_ALERTS) {
+      ul.lastChild.remove();
+    }
+
+    if (category === 'security') {
+      const banner = document.getElementById('banner');
+      banner.textContent = `SECURITY WARNING: ${tag} — ${desc}`;
+      banner.classList.remove('hidden');
+
+      const secEl = document.getElementById('secCount');
+      const secCount = (parseInt(secEl.textContent, 10) || 0) + 1;
+      secEl.textContent = secCount;
+      secEl.className = 'value bad';
+
+      if (bannerTimer) clearTimeout(bannerTimer);
+      bannerTimer = setTimeout(() => banner.classList.add('hidden'), BANNER_MS);
+    }
+  }
+
+  socket.on('alert', (msg) => {
+    renderAlert(msg);
+  });
+
+  socket.on('history', (items) => {
+    if (Array.isArray(items)) {
+      items.forEach(item => renderAlert(item));
+    }
+  });
+
+  const attackBtn = document.getElementById('attack');
+  if (attackBtn) {
+    attackBtn.addEventListener('click', () => {
+      fetch('/demo/attack', { method: 'POST' }).catch(() => {
+        socket.emit('simulate_attack');
+      });
+    });
+  }
+</script>
+</body>
+</html>
