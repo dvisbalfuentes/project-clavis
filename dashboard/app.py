@@ -48,15 +48,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("dashboard")
 
 app = Flask(__name__)
-app.config["DEMO"] = False
-socketio = SocketIO(app, async_mode="threading")
+app.config["DEMO"] = True
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 demo_alert_ids = itertools.count(1)
 demo_attack_cycle = itertools.cycle(
     [
-        ("ANOMALY_SECURITY", ["seq_regression", "ts_regression"]),
-        ("ANOMALY_SECURITY", ["implausible_value"]),
-        ("MAC_FAILURE", ["mac_mismatch"]),
+        ("REPLAY ATTACK", "Replay Attack Blocked [Sequence ID Duplicate: 10423]", ["seq_regression", "ts_regression"]),
+        ("MAC FAILURE", "OpenSSL Verification Failed [Corrupted MAC Dropped]", ["mac_mismatch"]),
+        ("COMMAND SPOOFING", "Unauthenticated Therapy Command Rejected [Forged HMAC]", ["implausible_value"]),
     ]
 )
 
@@ -74,7 +74,7 @@ def classify_bpm(bpm):
 def categorize(event_type, severity):
     if event_type == "ANOMALY_PHYSIOLOGICAL":
         return "physiological"
-    if event_type == "ANOMALY_SECURITY" or severity in ("WARN", "CRITICAL"):
+    if event_type in ("ANOMALY_SECURITY", "MAC_FAILURE", "REPLAY ATTACK", "MAC FAILURE", "COMMAND SPOOFING") or severity in ("WARN", "CRITICAL"):
         return "security"
     return "info"
 
@@ -83,18 +83,25 @@ def make_alert(alert_id, ts, severity, event_type, seq_id, details):
     if not isinstance(details, dict):
         details = {}
     reasons = details.get("reasons")
-    if isinstance(reasons, list):
+    if details.get("custom_desc"):
+        text = details["custom_desc"]
+    elif isinstance(reasons, list):
         text = ", ".join(str(r) for r in reasons)
     else:
         text = str(details.get("reason", ""))
+    
+    cat = categorize(event_type, severity)
     return {
         "id": alert_id,
         "ts": ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
         "severity": severity,
         "event_type": event_type,
+        "tag": event_type,
         "seq_id": seq_id,
-        "category": categorize(event_type, severity),
+        "category": cat,
+        "type": cat,
         "detail": text[:200],
+        "desc": text[:200],
         "bpm": details.get("bpm"),
         "rr_ms": details.get("rr_interval_ms"),
     }
@@ -186,7 +193,7 @@ class DemoGenerator:
         self.elapsed = 0.0
         self.beats = 0
         self.pending_rr = None
-        self.seq = 0
+        self.seq = 10400
 
     def next_rr(self):
         self.beats += 1
@@ -237,6 +244,7 @@ def demo_loop():
             if premature:
                 details = {
                     "reasons": ["physio_outlier"],
+                    "custom_desc": f"Premature Ventricular Contraction Detected (BPM: {bpm})",
                     "bpm": bpm,
                     "rr_interval_ms": round(generator.rr * 1000.0, 1),
                 }
@@ -254,9 +262,24 @@ def demo_loop():
         socketio.sleep(TICK_SECONDS)
 
 
+def dispatch_simulated_attack():
+    event_type, custom_desc, reasons = next(demo_attack_cycle)
+    alert = make_alert(
+        next(demo_alert_ids),
+        datetime.now(timezone.utc),
+        "CRITICAL",
+        event_type,
+        10423,
+        {"reasons": reasons, "custom_desc": custom_desc},
+    )
+    log.warning("SECURITY ALERT DISPATCHED: %s - %s", event_type, custom_desc)
+    socketio.emit("alert", alert)
+    return alert
+
+
 @app.route("/")
 def index():
-    return render_template("index.html", demo=app.config["DEMO"])
+    return render_template("index.html", demo=True)
 
 
 @app.route("/health")
@@ -266,19 +289,8 @@ def health():
 
 @app.route("/demo/attack", methods=["POST"])
 def demo_attack():
-    if not app.config["DEMO"]:
-        return jsonify(error="demo mode is off"), 404
-    event_type, reasons = next(demo_attack_cycle)
-    alert = make_alert(
-        next(demo_alert_ids),
-        datetime.now(timezone.utc),
-        "CRITICAL",
-        event_type,
-        None,
-        {"reasons": reasons},
-    )
-    socketio.emit("alert", alert)
-    return jsonify(sent=alert["event_type"])
+    alert = dispatch_simulated_attack()
+    return jsonify(sent=alert["event_type"], detail=alert["detail"])
 
 
 @socketio.on("connect")
@@ -293,6 +305,11 @@ def on_connect():
         emit("history", [])
 
 
+@socketio.on("simulate_attack")
+def handle_simulate_attack():
+    dispatch_simulated_attack()
+
+
 def main():
     parser = argparse.ArgumentParser(description="CLAVIS clinical dashboard")
     parser.add_argument("--demo", action="store_true", help="stream a synthetic ECG, no database needed")
@@ -300,9 +317,11 @@ def main():
     parser.add_argument("--port", type=int, default=5001)
     args = parser.parse_args()
 
-    app.config["DEMO"] = args.demo
-    socketio.start_background_task(demo_loop if args.demo else live_loop)
-    log.info("open http://%s:%d in your browser", args.host, args.port)
+    env_demo = os.getenv("DEMO_MODE", "0") == "1"
+    app.config["DEMO"] = args.demo or env_demo
+    
+    socketio.start_background_task(demo_loop if app.config["DEMO"] else live_loop)
+    log.info("open http://%s:%d in your browser (Demo Stream: %s)", args.host, args.port, app.config["DEMO"])
     socketio.run(app, host=args.host, port=args.port, allow_unsafe_werkzeug=True)
 
 
